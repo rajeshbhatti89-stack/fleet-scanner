@@ -7,10 +7,9 @@ import { getVehicles, resolveVehicle, saveVehicle } from '../../lib/storage';
 interface ScanLandingProps {
   onVehicleSelected: (vehicle: Vehicle) => void;
   initialToken?: string | null;
-  onGoToAdmin?: () => void;
 }
 
-export const ScanLanding: React.FC<ScanLandingProps> = ({ onVehicleSelected, initialToken, onGoToAdmin }) => {
+export const ScanLanding: React.FC<ScanLandingProps> = ({ onVehicleSelected, initialToken }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [cameraActive, setCameraActive] = useState(false);
@@ -434,16 +433,6 @@ export const ScanLanding: React.FC<ScanLandingProps> = ({ onVehicleSelected, ini
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Load Sample Fleet (Machine 1)</span>
               </button>
-
-              {onGoToAdmin && (
-                <button
-                  onClick={onGoToAdmin}
-                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-industrial-800 hover:bg-industrial-700 text-slate-300 font-semibold text-xs transition flex items-center justify-center space-x-1.5 border border-industrial-700"
-                >
-                  <span>Go to Admin</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           </div>
         ) : filteredVehicles.length === 0 ? (

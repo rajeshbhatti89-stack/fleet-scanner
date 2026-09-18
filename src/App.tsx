@@ -5,6 +5,7 @@ import { CameraCapture } from './components/operator/CameraCapture';
 import { OcrReview } from './components/operator/OcrReview';
 import { SuccessModal } from './components/operator/SuccessModal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminPinModal } from './components/admin/AdminPinModal';
 import { SupabaseConfigModal } from './components/admin/SupabaseConfigModal';
 import { getStoredSupabaseConfig, SupabaseConfig } from './lib/supabase';
 import { Vehicle, Operator, MeterLog } from './types';
@@ -16,6 +17,12 @@ export function App() {
   const [currentView, setCurrentView] = useState<'operator' | 'admin'>('operator');
   const [operatorStep, setOperatorStep] = useState<OperatorStep>('scan');
   
+  // Security / Admin Authentication State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(
+    () => sessionStorage.getItem('fleetlog_admin_auth') === 'true'
+  );
+  const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
+
   // Operator active state
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [activeOperator, setActiveOperator] = useState<Operator | null>(null);
@@ -32,10 +39,24 @@ export function App() {
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getStoredSupabaseConfig());
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-  // Parse hash URL for direct QR scan tokens: e.g. /#scan=token or native phone camera scans
+  // Parse hash URL for direct QR scan tokens or #admin
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash;
+
+      // Handle direct #admin request
+      if (hash === '#admin') {
+        if (sessionStorage.getItem('fleetlog_admin_auth') === 'true') {
+          setIsAdminAuthenticated(true);
+          setCurrentView('admin');
+        } else {
+          setIsAdminPinModalOpen(true);
+          setCurrentView('operator');
+        }
+        return;
+      }
+
+      // Handle QR scan token
       const match = hash.match(/scan=([^&]+)/);
       if (match && match[1]) {
         const token = decodeURIComponent(match[1]);
@@ -116,12 +137,29 @@ export function App() {
     }
   };
 
+  // Admin PIN Success
+  const handleAdminAuthSuccess = () => {
+    setIsAdminAuthenticated(true);
+    setIsAdminPinModalOpen(false);
+    setCurrentView('admin');
+  };
+
+  // Lock Admin Mode
+  const handleExitAdmin = () => {
+    sessionStorage.removeItem('fleetlog_admin_auth');
+    setIsAdminAuthenticated(false);
+    setCurrentView('operator');
+    handleScanNext();
+  };
+
   return (
     <div className="min-h-screen bg-industrial-950 text-slate-100 flex flex-col font-sans">
       {/* Universal Header */}
       <Header
         currentView={currentView}
-        onViewChange={(v) => setCurrentView(v)}
+        isAdminAuthenticated={isAdminAuthenticated}
+        onOpenAdminAuth={() => setIsAdminPinModalOpen(true)}
+        onExitAdmin={handleExitAdmin}
         supabaseConfig={supabaseConfig}
         onOpenSupabaseConfig={() => setIsConfigOpen(true)}
         onNewScanClick={() => {
@@ -137,7 +175,6 @@ export function App() {
             {operatorStep === 'scan' && (
               <ScanLanding
                 onVehicleSelected={handleVehicleSelected}
-                onGoToAdmin={() => setCurrentView('admin')}
               />
             )}
 
@@ -168,7 +205,6 @@ export function App() {
                 log={savedLog}
                 vehicle={activeVehicle}
                 onScanNext={handleScanNext}
-                onViewDashboard={() => setCurrentView('admin')}
               />
             )}
           </div>
@@ -182,7 +218,14 @@ export function App() {
         )}
       </main>
 
-      {/* Database / Supabase Credentials Settings Modal */}
+      {/* Admin Security PIN Authentication Modal */}
+      <AdminPinModal
+        isOpen={isAdminPinModalOpen}
+        onClose={() => setIsAdminPinModalOpen(false)}
+        onSuccess={handleAdminAuthSuccess}
+      />
+
+      {/* Database / Supabase Credentials Settings Modal (Admin Only) */}
       {isConfigOpen && (
         <SupabaseConfigModal
           onClose={() => setIsConfigOpen(false)}

@@ -7,14 +7,12 @@ interface SuccessModalProps {
   log: MeterLog;
   vehicle: Vehicle;
   onScanNext: () => void;
-  onViewDashboard: () => void;
 }
 
 export const SuccessModal: React.FC<SuccessModalProps> = ({
   log,
   vehicle,
-  onScanNext,
-  onViewDashboard
+  onScanNext
 }) => {
   useEffect(() => {
     // Fire festive green and gold confetti
@@ -106,7 +104,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
           )}
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Button */}
         <div className="space-y-2.5">
           <button
             onClick={onScanNext}
@@ -114,14 +112,6 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
           >
             <QrCode className="w-4 h-4 stroke-[2.5]" />
             <span>Scan Next Vehicle</span>
-          </button>
-
-          <button
-            onClick={onViewDashboard}
-            className="w-full py-3 px-4 rounded-xl bg-industrial-800 hover:bg-industrial-700 text-slate-300 text-xs font-semibold flex items-center justify-center space-x-2 transition"
-          >
-            <span>View Fleet Logs & Analytics</span>
-            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
