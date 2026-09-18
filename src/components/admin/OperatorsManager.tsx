@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Users, Plus, Upload, Download, Edit2, Search, AlertCircle, FileSpreadsheet, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Users, Plus, Upload, Download, Edit2, Search, AlertCircle, FileSpreadsheet, CheckCircle2, RefreshCw, Trash2 } from 'lucide-react';
 import { Operator, OperatorStatus } from '../../types';
-import { saveOperator, bulkUpsertOperators } from '../../lib/storage';
+import { saveOperator, bulkUpsertOperators, deleteOperator } from '../../lib/storage';
 import { downloadOperatorTemplate, parseOperatorsCsv } from '../../lib/csvHelper';
 
 interface OperatorsManagerProps {
@@ -27,6 +27,10 @@ export const OperatorsManager: React.FC<OperatorsManagerProps> = ({ operators, o
     phone_number: '',
     status: 'Active'
   });
+
+  // Delete state
+  const [deletingOperator, setDeletingOperator] = useState<Operator | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Bulk Modal
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -71,6 +75,21 @@ export const OperatorsManager: React.FC<OperatorsManagerProps> = ({ operators, o
 
     setIsModalOpen(false);
     onRefresh();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingOperator) return;
+    setIsDeleting(true);
+    try {
+      await deleteOperator(deletingOperator.operator_id);
+    } catch (err) {
+      console.error('Error deleting operator:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeletingOperator(null);
+      setIsModalOpen(false);
+      onRefresh();
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,13 +234,20 @@ export const OperatorsManager: React.FC<OperatorsManagerProps> = ({ operators, o
                         <span>{op.status}</span>
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right space-x-1">
                       <button
                         onClick={() => openEditModal(op)}
                         className="p-1.5 rounded-lg bg-industrial-800 hover:bg-industrial-700 text-slate-300 hover:text-white transition"
                         title="Edit Operator"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingOperator(op)}
+                        className="p-1.5 rounded-lg bg-industrial-800 hover:bg-red-950/80 text-industrial-400 hover:text-red-400 border border-transparent hover:border-red-800 transition"
+                        title="Delete Operator"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -295,20 +321,33 @@ export const OperatorsManager: React.FC<OperatorsManagerProps> = ({ operators, o
                 </select>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-industrial-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-industrial-800 text-slate-300 font-semibold hover:bg-industrial-700 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-hazard-500 hover:bg-hazard-400 text-industrial-950 font-bold transition shadow-lg shadow-hazard-500/20"
-                >
-                  {editingOperator ? 'Save Changes' : 'Create Operator'}
-                </button>
+              <div className="flex items-center justify-between pt-3 border-t border-industrial-800">
+                {editingOperator ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeletingOperator(editingOperator)}
+                    className="px-3 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-800/80 text-red-300 font-semibold text-xs flex items-center space-x-1.5 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-industrial-800 text-slate-300 font-semibold hover:bg-industrial-700 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-hazard-500 hover:bg-hazard-400 text-industrial-950 font-bold transition shadow-lg shadow-hazard-500/20"
+                  >
+                    {editingOperator ? 'Save Changes' : 'Create Operator'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -428,6 +467,49 @@ export const OperatorsManager: React.FC<OperatorsManagerProps> = ({ operators, o
                     <span>Confirm Import ({parsedPreview.length})</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE OPERATOR CONFIRMATION MODAL */}
+      {deletingOperator && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-industrial-900 border-2 border-red-800/80 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/80 text-red-400 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100 font-display">Delete Operator?</h3>
+                <p className="text-xs text-industrial-400">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 bg-industrial-950 p-3 rounded-xl border border-industrial-800 space-y-1">
+              <p>Permanently remove this operator from the system?</p>
+              <p className="font-mono font-bold text-hazard-400">{deletingOperator.operator_id}</p>
+              <p className="text-slate-400 truncate">{deletingOperator.operator_name}</p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeletingOperator(null)}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl bg-industrial-800 hover:bg-industrial-700 text-slate-300 font-semibold text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition flex items-center space-x-1.5 shadow-lg shadow-red-600/20"
+              >
+                {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Yes, Delete</span>
               </button>
             </div>
           </div>

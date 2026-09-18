@@ -243,6 +243,23 @@ export const bulkUpsertVehicles = async (newVehicles: Vehicle[]): Promise<{ coun
   return { count: newVehicles.length };
 };
 
+export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('vehicles').delete().eq('vehicle_id', vehicleId);
+      if (error) console.warn('Supabase deleteVehicle error:', error);
+    } catch (e) {
+      console.warn('Supabase deleteVehicle failed:', e);
+    }
+  }
+
+  const vehicles = await getVehicles();
+  const filtered = vehicles.filter(v => v.vehicle_id !== vehicleId);
+  localStorage.setItem(LOCAL_STORAGE_KEYS.VEHICLES, JSON.stringify(filtered));
+  return true;
+};
+
 // ==========================================
 // OPERATORS REPOSITORY
 // ==========================================
@@ -307,6 +324,23 @@ export const bulkUpsertOperators = async (newOperators: Operator[]): Promise<{ c
   const merged = Array.from(map.values());
   localStorage.setItem(LOCAL_STORAGE_KEYS.OPERATORS, JSON.stringify(merged));
   return { count: newOperators.length };
+};
+
+export const deleteOperator = async (operatorId: string): Promise<boolean> => {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('operators').delete().eq('operator_id', operatorId);
+      if (error) console.warn('Supabase deleteOperator error:', error);
+    } catch (e) {
+      console.warn('Supabase deleteOperator failed:', e);
+    }
+  }
+
+  const operators = await getOperators();
+  const filtered = operators.filter(o => o.operator_id !== operatorId);
+  localStorage.setItem(LOCAL_STORAGE_KEYS.OPERATORS, JSON.stringify(filtered));
+  return true;
 };
 
 // ==========================================
@@ -475,6 +509,26 @@ export const saveMeterLog = async (logData: Omit<MeterLog, 'log_id'> & { log_id?
   }
 
   return newLog;
+};
+
+export const deleteMeterLog = async (logId: string): Promise<boolean> => {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('meter_logs').delete().eq('log_id', logId);
+      if (error) console.warn('Supabase deleteMeterLog error:', error);
+    } catch (e) {
+      console.warn('Supabase deleteMeterLog failed:', e);
+    }
+  }
+
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEYS.LOGS);
+  if (raw) {
+    const logs: MeterLog[] = JSON.parse(raw);
+    const filtered = logs.filter(l => l.log_id !== logId);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.LOGS, JSON.stringify(filtered));
+  }
+  return true;
 };
 
 export const updateMeterLog = async (logId: string, updates: Partial<MeterLog>): Promise<MeterLog | null> => {

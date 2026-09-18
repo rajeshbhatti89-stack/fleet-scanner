@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Truck, Plus, Upload, Download, Edit2, CheckCircle2, XCircle, Search, QrCode, AlertCircle, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Truck, Plus, Upload, Download, Edit2, CheckCircle2, XCircle, Search, QrCode, AlertCircle, FileSpreadsheet, RefreshCw, Trash2 } from 'lucide-react';
 import { Vehicle, ReadingType, VehicleStatus } from '../../types';
-import { saveVehicle, bulkUpsertVehicles } from '../../lib/storage';
+import { saveVehicle, bulkUpsertVehicles, deleteVehicle } from '../../lib/storage';
 import { downloadVehicleTemplate, parseVehiclesCsv } from '../../lib/csvHelper';
 
 interface VehiclesManagerProps {
@@ -34,6 +34,10 @@ export const VehiclesManager: React.FC<VehiclesManagerProps> = ({
     last_known_reading: 0,
     status: 'Active'
   });
+
+  // Delete state
+  const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Bulk Upload modal
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -86,6 +90,21 @@ export const VehiclesManager: React.FC<VehiclesManagerProps> = ({
 
     setIsModalOpen(false);
     onRefresh();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingVehicle) return;
+    setIsDeleting(true);
+    try {
+      await deleteVehicle(deletingVehicle.vehicle_id);
+    } catch (err) {
+      console.error('Error deleting vehicle:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeletingVehicle(null);
+      setIsModalOpen(false);
+      onRefresh();
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,6 +273,13 @@ export const VehiclesManager: React.FC<VehiclesManagerProps> = ({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        onClick={() => setDeletingVehicle(v)}
+                        className="p-1.5 rounded-lg bg-industrial-800 hover:bg-red-950/80 text-industrial-400 hover:text-red-400 border border-transparent hover:border-red-800 transition"
+                        title="Delete Vehicle"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -342,20 +368,33 @@ export const VehiclesManager: React.FC<VehiclesManagerProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-industrial-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-industrial-800 text-slate-300 font-semibold hover:bg-industrial-700 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-hazard-500 hover:bg-hazard-400 text-industrial-950 font-bold transition shadow-lg shadow-hazard-500/20"
-                >
-                  {editingVehicle ? 'Save Changes' : 'Create Machine'}
-                </button>
+              <div className="flex items-center justify-between pt-3 border-t border-industrial-800">
+                {editingVehicle ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeletingVehicle(editingVehicle)}
+                    className="px-3 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-800/80 text-red-300 font-semibold text-xs flex items-center space-x-1.5 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-industrial-800 text-slate-300 font-semibold hover:bg-industrial-700 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-hazard-500 hover:bg-hazard-400 text-industrial-950 font-bold transition shadow-lg shadow-hazard-500/20"
+                  >
+                    {editingVehicle ? 'Save Changes' : 'Create Machine'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -482,6 +521,49 @@ export const VehiclesManager: React.FC<VehiclesManagerProps> = ({
                     <span>Confirm Import ({parsedPreview.length})</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deletingVehicle && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-industrial-900 border-2 border-red-800/80 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/80 text-red-400 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100 font-display">Delete Vehicle?</h3>
+                <p className="text-xs text-industrial-400">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 bg-industrial-950 p-3 rounded-xl border border-industrial-800 space-y-1">
+              <p>Permanently remove this machine from the fleet roster?</p>
+              <p className="font-mono font-bold text-hazard-400">{deletingVehicle.vehicle_id}</p>
+              <p className="text-slate-400 truncate">{deletingVehicle.machine_name}</p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeletingVehicle(null)}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl bg-industrial-800 hover:bg-industrial-700 text-slate-300 font-semibold text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition flex items-center space-x-1.5 shadow-lg shadow-red-600/20"
+              >
+                {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Yes, Delete</span>
               </button>
             </div>
           </div>
