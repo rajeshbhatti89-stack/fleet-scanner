@@ -42,10 +42,10 @@ export const QrPrintSheet: React.FC<QrPrintSheetProps> = ({
     setGenerating(true);
     const origin = window.location.origin;
     const items: QrItem[] = [];
-
     for (const v of vehicles) {
       if (selectedIds.includes(v.vehicle_id)) {
-        const scanUrl = `${origin}/#scan=${v.qr_code_token}`;
+        // Self-contained QR scan URL: embeds vehicle details so any device scanning it can immediately resolve Machine 1 without pre-synced database
+        const scanUrl = `${origin}/#scan=${encodeURIComponent(v.qr_code_token)}&vid=${encodeURIComponent(v.vehicle_id)}&name=${encodeURIComponent(v.machine_name)}&type=${v.reading_type}&last=${v.last_known_reading}`;
         try {
           const dataUrl = await QRCode.toDataURL(scanUrl, {
             width: 300,

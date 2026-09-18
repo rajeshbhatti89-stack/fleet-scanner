@@ -17,13 +17,30 @@ try {
   // ignore
 }
 
+// Default operators seeded for quick testing and fallback
+const DEFAULT_OPERATORS: Operator[] = [
+  {
+    operator_id: 'OP-101',
+    operator_name: 'Shift Operator 1',
+    phone_number: '+1 555-0101',
+    status: 'Active'
+  },
+  {
+    operator_id: 'OP-102',
+    operator_name: 'Shift Operator 2',
+    phone_number: '+1 555-0102',
+    status: 'Active'
+  }
+];
+
 // Initialize LocalStorage with empty arrays if not present
 const initLocalStore = () => {
   if (!localStorage.getItem(LOCAL_STORAGE_KEYS.VEHICLES)) {
     localStorage.setItem(LOCAL_STORAGE_KEYS.VEHICLES, JSON.stringify([]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.OPERATORS)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.OPERATORS, JSON.stringify([]));
+  const existingOps = localStorage.getItem(LOCAL_STORAGE_KEYS.OPERATORS);
+  if (!existingOps || existingOps === '[]') {
+    localStorage.setItem(LOCAL_STORAGE_KEYS.OPERATORS, JSON.stringify(DEFAULT_OPERATORS));
   }
   if (!localStorage.getItem(LOCAL_STORAGE_KEYS.LOGS)) {
     localStorage.setItem(LOCAL_STORAGE_KEYS.LOGS, JSON.stringify([]));
@@ -35,6 +52,119 @@ initLocalStore();
 // ==========================================
 // VEHICLES REPOSITORY
 // ==========================================
+
+/**
+ * Intelligently resolves a Vehicle from a scanned QR token, full URL, vehicle ID, or machine name.
+ * Supports case-insensitivity, whitespace trimming, URL extraction, alphanumeric normalization, and digit extraction.
+ */
+export const resolveVehicle = (input: string, vehicles: Vehicle[]): Vehicle | null => {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // 1. If input is a full URL (e.g. http://.../#scan=TOKEN or ?scan=TOKEN or /scan/TOKEN)
+  let extracted = trimmed;
+  const hashMatch = trimmed.match(/[#?]scan=([^&]+)/i);
+  if (hashMatch && hashMatch[1]) {
+    try {
+      extracted = decodeURIComponent(hashMatch[1]).trim();
+    } catch {
+      extracted = hashMatch[1].trim();
+    }
+  } else {
+    const pathMatch = trimmed.match(/\/scan\/([^/?#]+)/i);
+    if (pathMatch && pathMatch[1]) {
+      try {
+        extracted = decodeURIComponent(pathMatch[1]).trim();
+      } catch {
+        extracted = pathMatch[1].trim();
+      }
+    }
+  }
+
+  // 1b. Check if input contains embedded vehicle parameters from QR code (vid=...)
+  const vidMatch = trimmed.match(/[#&?]vid=([^&]+)/i);
+  if (vidMatch) {
+    const vid = decodeURIComponent(vidMatch[1]).trim();
+    // Check if vehicle already exists in fleet roster
+    const existing = vehicles.find(v => v.vehicle_id.toLowerCase() === vid.toLowerCase());
+    if (existing) return existing;
+
+    // Otherwise reconstruct vehicle from self-contained QR code payload
+    const nameMatch = trimmed.match(/[#&?]name=([^&]+)/i);
+    const typeMatch = trimmed.match(/[#&?]type=([^&]+)/i);
+    const lastMatch = trimmed.match(/[#&?]last=([^&]+)/i);
+    const tokenMatch = trimmed.match(/[#&?]scan=([^&]+)/i);
+    return {
+      vehicle_id: vid,
+      machine_name: nameMatch ? decodeURIComponent(nameMatch[1]).trim() : vid,
+      reading_type: (typeMatch && decodeURIComponent(typeMatch[1]).toUpperCase() === 'KM') ? 'KM' : 'HOURS',
+      qr_code_token: tokenMatch ? decodeURIComponent(tokenMatch[1]).trim() : `qr-${vid}`,
+      last_known_reading: lastMatch ? parseFloat(decodeURIComponent(lastMatch[1])) || 0 : 0,
+      status: 'Active'
+    };
+  }
+
+  const lowerExtracted = extracted.toLowerCase();
+  const lowerRaw = trimmed.toLowerCase();
+
+  // 2. Direct exact or case-insensitive match on qr_code_token or vehicle_id
+  let found = vehicles.find(v =>
+    v.qr_code_token?.toLowerCase() === lowerExtracted ||
+    v.vehicle_id?.toLowerCase() === lowerExtracted ||
+    v.qr_code_token?.toLowerCase() === lowerRaw ||
+    v.vehicle_id?.toLowerCase() === lowerRaw
+  );
+  if (found) return found;
+
+  // 3. Direct match against machine_name
+  found = vehicles.find(v =>
+    v.machine_name?.toLowerCase() === lowerExtracted ||
+    v.machine_name?.toLowerCase() === lowerRaw
+  );
+  if (found) return found;
+
+  // 4. Normalized alphanumeric match (stripping spaces, dashes, underscores)
+  const clean = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanExtracted = clean(extracted);
+  const cleanRaw = clean(trimmed);
+
+  if (cleanExtracted || cleanRaw) {
+    found = vehicles.find(v => {
+      const vId = clean(v.vehicle_id);
+      const vName = clean(v.machine_name);
+      const vToken = clean(v.qr_code_token);
+      return (
+        (cleanExtracted && (vId === cleanExtracted || vName === cleanExtracted || vToken === cleanExtracted)) ||
+        (cleanRaw && (vId === cleanRaw || vName === cleanRaw || vToken === cleanRaw))
+      );
+    });
+    if (found) return found;
+
+    // 5. If input is numeric (e.g. "1" or "01"), match vehicle whose numeric component matches
+    const numericPart = cleanRaw.replace(/\D/g, '') || cleanExtracted.replace(/\D/g, '');
+    if (numericPart) {
+      const targetNum = parseInt(numericPart, 10);
+      found = vehicles.find(v => {
+        const vIdDigits = (v.vehicle_id.match(/\d+/) || [])[0];
+        if (vIdDigits && parseInt(vIdDigits, 10) === targetNum) return true;
+        const vNameDigits = (v.machine_name.match(/\d+/) || [])[0];
+        if (vNameDigits && parseInt(vNameDigits, 10) === targetNum) return true;
+        return false;
+      });
+      if (found) return found;
+    }
+
+    // 6. Substring contains match
+    found = vehicles.find(v =>
+      (cleanExtracted && (clean(v.vehicle_id).includes(cleanExtracted) || clean(v.machine_name).includes(cleanExtracted))) ||
+      (cleanRaw && (clean(v.vehicle_id).includes(cleanRaw) || clean(v.machine_name).includes(cleanRaw)))
+    );
+    if (found) return found;
+  }
+
+  return null;
+};
 
 export const getVehicles = async (): Promise<Vehicle[]> => {
   const supabase = getSupabaseClient();
@@ -54,7 +184,7 @@ export const getVehicles = async (): Promise<Vehicle[]> => {
 
 export const getVehicleByToken = async (qrToken: string): Promise<Vehicle | null> => {
   const vehicles = await getVehicles();
-  return vehicles.find(v => v.qr_code_token === qrToken || v.vehicle_id === qrToken) || null;
+  return resolveVehicle(qrToken, vehicles);
 };
 
 export const saveVehicle = async (vehicle: Vehicle): Promise<Vehicle> => {

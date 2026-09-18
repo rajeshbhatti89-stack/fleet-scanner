@@ -102,3 +102,31 @@
     box-shadow: none !important;
   }
 }
+
+/* Html5Qrcode Scanner Customization */
+#qr-camera-viewport {
+  border: none !important;
+  position: relative;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#qr-camera-viewport video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0.75rem;
+}
+
+#qr-camera-viewport img {
+  display: none !important;
+}
+
+#qr-camera-viewport__scan_region {
+  background: transparent !important;
+}
+
+#qr-scratch-scanner {
+  display: none !important;
+}
+

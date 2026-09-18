@@ -8,7 +8,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { SupabaseConfigModal } from './components/admin/SupabaseConfigModal';
 import { getStoredSupabaseConfig, SupabaseConfig } from './lib/supabase';
 import { Vehicle, Operator, MeterLog } from './types';
-import { getVehicleByToken } from './lib/storage';
+import { getVehicleByToken, saveVehicle } from './lib/storage';
 
 type OperatorStep = 'scan' | 'capture' | 'review' | 'success';
 
@@ -32,14 +32,36 @@ export function App() {
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getStoredSupabaseConfig());
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-  // Parse hash URL for direct QR scan tokens: e.g. /#scan=token or /scan/:token
+  // Parse hash URL for direct QR scan tokens: e.g. /#scan=token or native phone camera scans
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash;
       const match = hash.match(/scan=([^&]+)/);
       if (match && match[1]) {
-        const token = match[1];
-        const v = await getVehicleByToken(token);
+        const token = decodeURIComponent(match[1]);
+        let v = await getVehicleByToken(token);
+
+        // If not found in local store, but hash contains embedded vehicle parameters from QR sticker
+        if (!v) {
+          const vidMatch = hash.match(/vid=([^&]+)/);
+          if (vidMatch) {
+            const vid = decodeURIComponent(vidMatch[1]);
+            const nameMatch = hash.match(/name=([^&]+)/);
+            const typeMatch = hash.match(/type=([^&]+)/);
+            const lastMatch = hash.match(/last=([^&]+)/);
+            const embeddedVehicle: Vehicle = {
+              vehicle_id: vid,
+              machine_name: nameMatch ? decodeURIComponent(nameMatch[1]) : vid,
+              reading_type: (typeMatch && decodeURIComponent(typeMatch[1]).toUpperCase() === 'KM') ? 'KM' : 'HOURS',
+              qr_code_token: token,
+              last_known_reading: lastMatch ? parseFloat(decodeURIComponent(lastMatch[1])) || 0 : 0,
+              status: 'Active'
+            };
+            await saveVehicle(embeddedVehicle);
+            v = embeddedVehicle;
+          }
+        }
+
         if (v) {
           setActiveVehicle(v);
           setOperatorStep('capture');

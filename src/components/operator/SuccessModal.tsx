@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, ArrowRight, Truck, Clock, MapPin, QrCode } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Truck, Clock, MapPin, QrCode, User } from 'lucide-react';
 import { MeterLog, Vehicle } from '../../types';
 
 interface SuccessModalProps {
@@ -71,6 +71,16 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
               <span>Machine:</span>
             </span>
             <span className="font-bold text-slate-200">{vehicle.machine_name} ({vehicle.vehicle_id})</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-industrial-400 flex items-center space-x-1.5">
+              <User className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Operator:</span>
+            </span>
+            <span className="font-bold text-slate-100">
+              {log.operator?.operator_name || log.operator_id}
+            </span>
           </div>
 
           <div className="flex items-center justify-between">
